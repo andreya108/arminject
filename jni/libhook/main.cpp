@@ -28,6 +28,9 @@
  */
 #include "hook.h"
 #include "hooks/io.h"
+#include "hooks/sql.h"
+
+static const char* copyright = "LIBHOOK Copyright (c) 2015, Simone Margaritelli";
 
 typedef struct
 {
@@ -39,8 +42,7 @@ hook_t;
 
 static hook_t __hooks[] = {
 
-    ADDHOOK( open ),
-    ADDHOOK( write ),
+/*    ADDHOOK( write ),
     ADDHOOK( read ),
     ADDHOOK( close ),
     ADDHOOK( connect ),
@@ -50,7 +52,8 @@ static hook_t __hooks[] = {
     ADDHOOK( recv ),
     ADDHOOK( recvfrom ),
     ADDHOOK( recvmsg ),
-    ADDHOOK( shutdown )
+    ADDHOOK( shutdown ),*/
+    ADDHOOK( register_android_functions )
 };
 
 #define NHOOKS ( sizeof(__hooks) / sizeof(__hooks[0] ) )
@@ -80,7 +83,7 @@ void __attribute__ ((constructor)) libhook_main()
     int j = 0, h = 0;
 
     for( ld_modules_t::const_iterator i = modules.begin(), e = modules.end(); i != e; ++i, ++j ){
-      HOOKLOG( "[#%d] %s", j, i->name.c_str() );
+//      HOOKLOG( "[#%d] %s", j, i->name.c_str() );
 
         // don't hook ourself :P
         if( i->name.find( "/system/bin/app_process" ) != std::string::npos ) continue;
@@ -88,18 +91,21 @@ void __attribute__ ((constructor)) libhook_main()
         if( i->name.find( "libhook.so" ) != std::string::npos ) continue;
         if( i->name.find( "libcutils.so" ) != std::string::npos ) continue;
 
-        HOOKLOG( "[0x%X] Hooking %s ...", i->address, i->name.c_str() );
+        if( i->name.find( "libandroid_runtime.so" ) != std::string::npos )
+        {
+          HOOKLOG( "[0x%X] Hooking %s ...", i->address, i->name.c_str() );
 
-        for( size_t j = 0; j < NHOOKS; ++j ) {
-          unsigned tmp = libhook_addhook( i->name.c_str(), __hooks[j].name, __hooks[j].hook );
+          for( size_t j = 0; j < NHOOKS; ++j ) {
+            unsigned tmp = libhook_addhook( i->name.c_str(), __hooks[j].name, __hooks[j].hook );
 
-          // update the original pointer only if the reference we found is valid
-          // and the pointer itself doesn't have a value yet.
-          if( __hooks[j].original == 0 && tmp != 0 ){
-            __hooks[j].original = (uintptr_t)tmp;
+            // update the original pointer only if the reference we found is valid
+            // and the pointer itself doesn't have a value yet.
+            if( __hooks[j].original == 0 && tmp != 0 ){
+              __hooks[j].original = (uintptr_t)tmp;
 
-            HOOKLOG( "  %s - 0x%x -> 0x%x", __hooks[j].name, __hooks[j].original, __hooks[j].hook );
-            h++;
+              HOOKLOG( "  %s - 0x%x -> 0x%x", __hooks[j].name, __hooks[j].original, __hooks[j].hook );
+              h++;
+            }
           }
         }
     }
