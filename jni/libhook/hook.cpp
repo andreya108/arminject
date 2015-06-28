@@ -94,14 +94,24 @@ ld_modules_t libhook_get_modules() {
 }
 
 unsigned libhook_patch_address( unsigned addr, unsigned newval ) {
+    int rc = 0;
     unsigned original = -1;
     size_t pagesize = sysconf(_SC_PAGESIZE);
     const void *aligned_pointer = (const void*)(addr & ~(pagesize - 1));
 
-    mprotect(aligned_pointer, pagesize, PROT_WRITE | PROT_READ);
+//    HOOKLOG( "mprotect(0x%X, 0x%X, 0x%X);", (unsigned int)aligned_pointer, (unsigned int)pagesize, PROT_WRITE | PROT_READ );
+
+    rc = mprotect(aligned_pointer, pagesize, PROT_WRITE | PROT_READ);
+
+//    HOOKLOG( "rc=%i, patching 0x%X -> 0x%X", rc, addr, newval );
 
     original = *(unsigned *)addr;
+
+//    HOOKLOG( "original = 0x%X", original );
+
     *((unsigned*)addr) = newval;
+
+//    HOOKLOG( "mprotect(0x%X, 0x%X, 0x%X);", (unsigned int)aligned_pointer, (unsigned int)pagesize, PROT_READ );
 
     mprotect(aligned_pointer, pagesize, PROT_READ);
 
@@ -115,21 +125,30 @@ unsigned libhook_addhook( const char *soname, const char *symbol, unsigned newva
     unsigned int sym_offset = 0;
     size_t i;
 
+//    HOOKLOG( "dlopen(%s)", soname );
+
     // since we know the module is already loaded and mostly
     // we DO NOT want its constructors to be called again,
     // ise RTLD_NOLOAD to just get its soinfo address.
     si = (struct soinfo *)dlopen( soname, 4 /* RTLD_NOLOAD */ );
+//    si = (struct soinfo *)dlopen( soname, 0 /* RTLD_NOLOAD */ );
     if( !si ){
         HOOKLOG( "dlopen error: %s.", dlerror() );
         return 0;
     }
+
+//    HOOKLOG( "libhook_addhook dlopen success [0x%X], soinfo_elf_lookup...",(unsigned int)si);
 
     s = soinfo_elf_lookup( si, elfhash(symbol), symbol );
     if( !s ){
         return 0;
     }
 
+  //  HOOKLOG( "soinfo_elf_lookup = [0x%X]", (unsigned int)s);
+
     sym_offset = s - si->symtab;
+
+//    HOOKLOG( "sym_offset = [0x%X]", sym_offset);
 
     // loop reloc table to find the symbol by index
     for( i = 0, rel = si->plt_rel; i < si->plt_rel_count; ++i, ++rel ) {
@@ -137,9 +156,13 @@ unsigned libhook_addhook( const char *soname, const char *symbol, unsigned newva
         unsigned sym   = ELF32_R_SYM(rel->r_info);
         unsigned reloc = (unsigned)(rel->r_offset + si->base);
 
+//        HOOKLOG( "[%i] type/reloc/sym = [0x%X/0x%X/0x%X]", i, type, reloc, sym);
+
         if( sym_offset == sym ) {
             switch(type) {
                 case R_ARM_JUMP_SLOT:
+
+//                    HOOKLOG( "found R_ARM_JUMP_SLOT at [0x%X]", reloc);
 
                     return libhook_patch_address( reloc, newval );
 
@@ -149,6 +172,8 @@ unsigned libhook_addhook( const char *soname, const char *symbol, unsigned newva
             }
         }
     }
+
+//    HOOKLOG( "find by index finished %i", 0);
 
     unsigned original = 0;
 

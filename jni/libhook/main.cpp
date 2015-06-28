@@ -77,22 +77,33 @@ void __attribute__ ((constructor)) libhook_main()
     HOOKLOG( "Found %u loaded modules.", modules.size() );
     HOOKLOG( "Installing %u hooks.", NHOOKS );
 
-    for( ld_modules_t::const_iterator i = modules.begin(), e = modules.end(); i != e; ++i ){
+    int j = 0, h = 0;
+
+    for( ld_modules_t::const_iterator i = modules.begin(), e = modules.end(); i != e; ++i, ++j ){
+      HOOKLOG( "[#%d] %s", j, i->name.c_str() );
+
         // don't hook ourself :P
-        if( i->name.find( "libhook.so" ) == std::string::npos ) {
-            HOOKLOG( "[0x%X] Hooking %s ...", i->address, i->name.c_str() );
+        if( i->name.find( "/system/bin/app_process" ) != std::string::npos ) continue;
+        if( i->name.find( "/system/bin/linker" ) != std::string::npos ) continue;
+        if( i->name.find( "libhook.so" ) != std::string::npos ) continue;
+        if( i->name.find( "libcutils.so" ) != std::string::npos ) continue;
 
-            for( size_t j = 0; j < NHOOKS; ++j ) {
-                unsigned tmp = libhook_addhook( i->name.c_str(), __hooks[j].name, __hooks[j].hook );
+        HOOKLOG( "[0x%X] Hooking %s ...", i->address, i->name.c_str() );
 
-                // update the original pointer only if the reference we found is valid
-                // and the pointer itself doesn't have a value yet.
-                if( __hooks[j].original == 0 && tmp != 0 ){
-                    __hooks[j].original = (uintptr_t)tmp;
+        for( size_t j = 0; j < NHOOKS; ++j ) {
+          unsigned tmp = libhook_addhook( i->name.c_str(), __hooks[j].name, __hooks[j].hook );
 
-                    HOOKLOG( "  %s - 0x%x -> 0x%x", __hooks[j].name, __hooks[j].original, __hooks[j].hook );
-                }
-            }
+          // update the original pointer only if the reference we found is valid
+          // and the pointer itself doesn't have a value yet.
+          if( __hooks[j].original == 0 && tmp != 0 ){
+            __hooks[j].original = (uintptr_t)tmp;
+
+            HOOKLOG( "  %s - 0x%x -> 0x%x", __hooks[j].name, __hooks[j].original, __hooks[j].hook );
+            h++;
+          }
         }
     }
+
+    HOOKLOG( "Installed %u hooks.", h );
+
 }
